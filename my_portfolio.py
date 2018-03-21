@@ -28,11 +28,5 @@ class Generator(PortfolioGenerator):
 if __name__=='__main__':
 	gen = Generator()
 	stock_df = gen.read_stock_data()
-	'''
-	ticker_vals = stock_df['ticker'].unique()
-	weights = 200*np.random.rand(ticker_vals.shape[0])-100
-	output = pd.Series(weights, index=ticker_vals)
-	print output
-	'''
 	gen.build_signal(stock_df)
 	print gen.simulate_portfolio()
