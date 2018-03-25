@@ -19,12 +19,9 @@ class Generator(PortfolioGenerator):
 	#gets ticker values for small cap firms
 	def get_small_cap_inds(self, stock_features):
 		curr_cap = stock_features[['ticker','market_cap']].tail(1000)
-		#median = curr_cap['market_cap'].median()
-		qt = curr_cap['market_cap'].quantile([.25,.5,.6])
-		qt1 = curr_cap[curr_cap['market_cap'] < qt[.25]]['ticker']
-		qt2 = curr_cap[curr_cap['market_cap'] < qt[.5]]['ticker']
-		qt3 = curr_cap[curr_cap['market_cap'] < qt[.6]]['ticker']
-		return [qt1.values, qt2.values, qt3.values]
+		median = curr_cap['market_cap'].median()
+		lower_half = curr_cap[curr_cap['market_cap'] < median]['ticker']
+		return lower_half.values
 
 
 	def oil_signal(self, stock_features):
@@ -103,9 +100,7 @@ class Generator(PortfolioGenerator):
 	def build_signal(self, stock_features):
 		small_inds = self.get_small_cap_inds(stock_features)
 		small_boost = np.zeros(1000)
-		small_boost[small_inds[0]] += 7.5
-		small_boost[small_inds[1]] += 5
-		small_boost[small_inds[2]] += 2.5
+		small_boost[small_inds] += 5
 
 		vix_2 = self.vix2_signal(stock_features)
 		small_ix = self.ix_signal(stock_features, 'SMALL_IX', [1.4, .74, .8, 1.1]) 
