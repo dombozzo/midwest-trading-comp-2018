@@ -15,6 +15,17 @@ class Generator(PortfolioGenerator):
 	
 	def __init__(self):
 		pass
+	
+	#gets ticker values for small cap firms
+	def get_small_cap_inds(self, stock_features):
+		curr_cap = stock_features[['ticker','market_cap']].tail(1000)
+		#median = curr_cap['market_cap'].median()
+		qt = curr_cap['market_cap'].quantile([.25,.5,.6])
+		qt1 = curr_cap[curr_cap['market_cap'] < qt[.25]]['ticker']
+		qt2 = curr_cap[curr_cap['market_cap'] < qt[.5]]['ticker']
+		qt3 = curr_cap[curr_cap['market_cap'] < qt[.6]]['ticker']
+		return [qt1.values, qt2.values, qt3.values]
+
 
 	def oil_signal(self, stock_features):
 		last2 = stock_features[['ticker','industry','OIL']].tail(2000)
@@ -90,11 +101,17 @@ class Generator(PortfolioGenerator):
 
 	# for now this just returns random weights
 	def build_signal(self, stock_features):
+		small_inds = self.get_small_cap_inds(stock_features)
+		small_boost = np.zeros(1000)
+		small_boost[small_inds[0]] += 7.5
+		small_boost[small_inds[1]] += 5
+		small_boost[small_inds[2]] += 2.5
+
 		vix_2 = self.vix2_signal(stock_features)
 		small_ix = self.ix_signal(stock_features, 'SMALL_IX', [1.4, .74, .8, 1.1]) 
 		big_ix = self.ix_signal(stock_features, 'BIG_IX', [1.1, .74, .8, 1.1]) 
 		oil = self.oil_signal(stock_features)
-		return small_ix + big_ix + oil
+		return small_ix + big_ix + oil + small_boost
 		temp =  .01*self.temp_signal(stock_features)
 		return other
 		
