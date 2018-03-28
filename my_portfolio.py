@@ -23,7 +23,7 @@ class Generator(PortfolioGenerator):
 		lower_half = curr_cap[curr_cap['market_cap'] < median]['ticker']
 		return lower_half.values
 
-
+	#gets percent change signal for oil prices
 	def oil_signal(self, stock_features):
 		last2 = stock_features[['ticker','industry','OIL']].tail(2000)
 		yest = last2.head(1000).set_index('ticker')
@@ -40,6 +40,10 @@ class Generator(PortfolioGenerator):
 		result = pd.concat([tech, agriculture, finance, consumer, other])
 		return result
 	
+	#TODO
+	# def vix_signal(self, stock_features):
+
+	# second vix signal
 	def vix2_signal(self, stock_features):
 		last2 = stock_features[['ticker','industry','VIX']].tail(2000)
 		yest = last2.head(1000).set_index('ticker')
@@ -57,6 +61,7 @@ class Generator(PortfolioGenerator):
 		result = pd.concat([tech, agriculture, finance, consumer, other])
 		return result
 	
+	#TODO - need something better
 	def temp_signal(self, stock_features):
 		last25 = stock_features[['ticker','industry','TEMP']].tail(25000)
 		today = last25.tail(1000).set_index('ticker')
@@ -95,9 +100,25 @@ class Generator(PortfolioGenerator):
 
 		result = pd.concat([tech, agriculture, finance, consumer, other])
 		return result
+	
+	#TODO -- need something better
+	#signal for 3 monthly t-bill rates - inversely related to market movements
+	def get_3mr_signal(self, stock_features):
+		last2 = stock_features[['ticker','industry','3M_R']].tail(2000)
+		yest = last2.head(1000).set_index('ticker')
+		today = last2.tail(1000).set_index('ticker')
+		inv_pct_chg = today[['industry']].join((yest['3M_R'] - today['3M_R'])/yest['3M_R'])
+		return inv_pct_chg['3M_R']
 
-	# for now this just returns random weights
+
+	# this is the function that actually builds the final signals based on the
+	# all the individual signal functions above
 	def build_signal(self, stock_features):
+		
+		x = self.get_3mr_signal(stock_features)
+		print 700*x.tail()
+		
+		#provide boost to small-cap firms
 		small_inds = self.get_small_cap_inds(stock_features)
 		small_boost = np.zeros(1000)
 		small_boost[small_inds] += 5
@@ -106,9 +127,10 @@ class Generator(PortfolioGenerator):
 		small_ix = self.ix_signal(stock_features, 'SMALL_IX', [1.4, .74, .8, 1.1]) 
 		big_ix = self.ix_signal(stock_features, 'BIG_IX', [1.1, .74, .8, 1.1]) 
 		oil = self.oil_signal(stock_features)
-		return small_ix + big_ix + oil + small_boost
+		return small_ix + big_ix + oil + small_boost + x
 		temp =  .01*self.temp_signal(stock_features)
-		return other
+		return temp
+	
 		
 
 #main for testing
