@@ -60,6 +60,10 @@ class Generator(PortfolioGenerator):
 
 		result = pd.concat([tech, agriculture, finance, consumer, other])
 		return result
+
+	#TODO mitigated linear - % deviation from average
+	def vix_signal(self, stock_features):
+		avg_vix = 15.5305463609
 	
 	#TODO - need something better
 	def temp_signal(self, stock_features):
@@ -83,7 +87,41 @@ class Generator(PortfolioGenerator):
 		
 		result = pd.concat([tech, agriculture, finance, consumer, other])
 		return result
+
+	#TODO - implement mitigated linear distribution based on deviance from average	
+	def rain_signal(self, stock_features):	
+		avg_rain = 0.377809102452
+		today = stock_features[['ticker', 'industry', 'RAIN']].tail(1000)
+		diff_today_avg = today.RAIN - avg_rain
+
+		# compute deviation from avg HERE
+
+		#mitigate changes based on industry
+		tech = diff_today_avg[diff_today_avg['industry'] == 'TECH'].RAIN * 0.02
+		agriculture = diff_today_avg[diff_today_avg['industry'] == 'AGRICULTURE'].RAIN * 0.02
+		finance = diff_today_avg[diff_today_avg['industry'] == 'FINANCE'].RAIN * 0.02
+		consumer = diff_today_avg[diff_today_avg['industry'] == 'CONSUMER'].RAIN * 0.10
+		other = diff_today_avg[diff_today_avg['industry'] == 'OTHER'].RAIN * 0.02
 	
+		result = pd.concat([tech, agriculture, finance, consumer, other])
+		return result		
+
+	#TODO - value as compared to mean
+	def senti_signal(self, stock_features):
+		avg_senti = 68.9302780531
+		today = stock_features[['ticker','industry', 'SENTI']].tail(1000)
+		diff = today.SENTI - avg_senti
+
+		#changes based on industry
+		tech = diff[diff['industry'] == 'TECH'].SENTI * 0.25
+                agriculture = diff[diff['industry'] == 'AGRICULTURE'].SENTI * 0.2
+                finance = diff[diff['industry'] == 'FINANCE'].SENTI * 0.3
+                consumer = diff[diff['industry'] == 'CONSUMER'].SENTI * 0.20
+                other = diff[diff['industry'] == 'OTHER'].SENTI * 0.2
+		
+		result = pd.concat([tech,agriculture, finance, consumer, other])
+		return result
+
 	#TODO - include notion of market cap
 	def ix_signal(self, stock_features, ix_type, ind_weights):
 		last2 = stock_features[['ticker','industry',ix_type]].tail(2000)
@@ -129,8 +167,9 @@ class Generator(PortfolioGenerator):
 		oil = self.oil_signal(stock_features)
 		return small_ix + big_ix + oil + small_boost + x
 		temp =  .01*self.temp_signal(stock_features)
-		return temp
 	
+		rain = self.rain_signal(stock_features)
+		senti = self.senti_signal(stock_features)
 		
 
 #main for testing
