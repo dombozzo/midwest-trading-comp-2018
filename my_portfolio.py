@@ -10,6 +10,11 @@ Description:
 import pandas as pd
 import numpy as np
 from portfolio import PortfolioGenerator
+import collections
+
+#TODO - remove -- global variable for stat collection
+stats = collections.defaultdict(list)
+
 
 class Generator(PortfolioGenerator):
 	
@@ -22,6 +27,23 @@ class Generator(PortfolioGenerator):
 		median = curr_cap['market_cap'].median()
 		lower_half = curr_cap[curr_cap['market_cap'] < median]['ticker']
 		return lower_half.values
+	
+	#gets percent change signal for copper prices
+	def copper_signal(self, stock_features):
+		last2 = stock_features[['ticker','industry','COPP']].tail(2000)
+		yest = last2.head(1000).set_index('ticker')
+		today = last2.tail(1000).set_index('ticker')
+		pct_chg = today[['industry']].join(-1*(today.COPP - yest.COPP)/yest.COPP)
+
+		#now mitigate changes based on industry
+		tech = pct_chg[pct_chg['industry'] == 'TECH'].COPP * .2
+		agriculture = pct_chg[pct_chg['industry'] == 'AGRICULTURE'].COPP * .35
+		finance = pct_chg[pct_chg['industry'] == 'FINANCE'].COPP * .25
+		consumer = pct_chg[pct_chg['industry'] == 'CONSUMER'].COPP * .3
+		other = pct_chg[pct_chg['industry'] == 'OTHER'].COPP * .25
+
+		result = pd.concat([tech, agriculture, finance, consumer, other])
+		return result
 
 	#gets percent change signal for oil prices
 	def oil_signal(self, stock_features):
@@ -40,16 +62,32 @@ class Generator(PortfolioGenerator):
 		result = pd.concat([tech, agriculture, finance, consumer, other])
 		return result
 	
-	#TODO
-	# def vix_signal(self, stock_features):
+	#TODO - figure out why not working
+	#mitigated linear - negative % deviation from average
+	def vix_signal(self, stock_features):
+		avg_vix = 15.5305463609
+		today = stock_features[['ticker', 'industry', 'VIX']].tail(1000)
+		today = today.set_index('ticker')
+		diff_today_avg = today[['industry']].join(-100*(today.VIX-avg_vix)/avg_vix)
 
+		#mitigate changes based on industry
+		tech = diff_today_avg[diff_today_avg['industry'] == 'TECH'].VIX * 0.02
+		agriculture = diff_today_avg[diff_today_avg['industry'] == 'AGRICULTURE'].VIX * 0.02
+		finance = diff_today_avg[diff_today_avg['industry'] == 'FINANCE'].VIX * 0.02
+		consumer = diff_today_avg[diff_today_avg['industry'] == 'CONSUMER'].VIX * 0.10
+		other = diff_today_avg[diff_today_avg['industry'] == 'OTHER'].VIX * 0.02
+	
+		result = pd.concat([tech, agriculture, finance, consumer, other])
+		return result		
+		
+	#TODO
 	# second vix signal
 	def vix2_signal(self, stock_features):
 		last2 = stock_features[['ticker','industry','VIX']].tail(2000)
 		yest = last2.head(1000).set_index('ticker')
 		today = last2.tail(1000).set_index('ticker')
 		#TODO - make quadratic
-		pct_chg = today[['industry']].join(((today.VIX - yest.VIX)/yest.VIX) ** 3)
+		pct_chg = today[['industry']].join((-1*(today.VIX - yest.VIX)/yest.VIX) ** 3)
 
 		#now mitigate changes based on industry
 		tech = pct_chg[pct_chg['industry'] == 'TECH'].VIX * .4
@@ -61,9 +99,6 @@ class Generator(PortfolioGenerator):
 		result = pd.concat([tech, agriculture, finance, consumer, other])
 		return result
 
-	#TODO mitigated linear - % deviation from average
-	def vix_signal(self, stock_features):
-		avg_vix = 15.5305463609
 	
 	#TODO - need something better
 	def temp_signal(self, stock_features):
@@ -92,9 +127,8 @@ class Generator(PortfolioGenerator):
 	def rain_signal(self, stock_features):	
 		avg_rain = 0.377809102452
 		today = stock_features[['ticker', 'industry', 'RAIN']].tail(1000)
-		diff_today_avg = today.RAIN - avg_rain
-
-		# compute deviation from avg HERE
+		today = today.set_index('ticker')
+		diff_today_avg = today[['industry']].join(today.RAIN-avg_rain)
 
 		#mitigate changes based on industry
 		tech = diff_today_avg[diff_today_avg['industry'] == 'TECH'].RAIN * 0.02
@@ -110,14 +144,15 @@ class Generator(PortfolioGenerator):
 	def senti_signal(self, stock_features):
 		avg_senti = 68.9302780531
 		today = stock_features[['ticker','industry', 'SENTI']].tail(1000)
-		diff = today.SENTI - avg_senti
+		today = today.set_index('ticker')
+		diff = today[['industry']].join(today.SENTI-avg_senti)
 
 		#changes based on industry
 		tech = diff[diff['industry'] == 'TECH'].SENTI * 0.25
-                agriculture = diff[diff['industry'] == 'AGRICULTURE'].SENTI * 0.2
-                finance = diff[diff['industry'] == 'FINANCE'].SENTI * 0.3
-                consumer = diff[diff['industry'] == 'CONSUMER'].SENTI * 0.20
-                other = diff[diff['industry'] == 'OTHER'].SENTI * 0.2
+		agriculture = diff[diff['industry'] == 'AGRICULTURE'].SENTI * 0.2
+		finance = diff[diff['industry'] == 'FINANCE'].SENTI * 0.3
+		consumer = diff[diff['industry'] == 'CONSUMER'].SENTI * 0.20
+		other = diff[diff['industry'] == 'OTHER'].SENTI * 0.2
 		
 		result = pd.concat([tech,agriculture, finance, consumer, other])
 		return result
@@ -152,27 +187,53 @@ class Generator(PortfolioGenerator):
 	# this is the function that actually builds the final signals based on the
 	# all the individual signal functions above
 	def build_signal(self, stock_features):
-		
-		x = self.get_3mr_signal(stock_features)
-		print 700*x.tail()
+		copp = self.copper_signal(stock_features)
+		stats['copp'].append(copp)
+
+		senti = self.senti_signal(stock_features)
+		stats['senti'].append(senti)
+		return copp
+		rain = self.rain_signal(stock_features)
+		stats['rain'].append(rain)
+		sig_3mr = self.get_3mr_signal(stock_features)
+		stats['3mr'].append(sig_3mr)
 		
 		#provide boost to small-cap firms
 		small_inds = self.get_small_cap_inds(stock_features)
 		small_boost = np.zeros(1000)
+		large_boost = np.zeros(1000) + 5
 		small_boost[small_inds] += 5
+		large_boost[small_inds] -= 5
+	
+		#calculate ix signal
+		small_ix = self.ix_signal(stock_features, 'SMALL_IX', [1.4, .74, .8, 1.1]) 
+		stats['small_ix'].append(small_ix)
+		big_ix = self.ix_signal(stock_features, 'BIG_IX', [1.1, .74, .8, 1.1]) 
+		stats['big_ix'].append(big_ix)
+		modified_ix_signal = small_ix * small_boost + big_ix * large_boost
 
 		vix_2 = self.vix2_signal(stock_features)
-		small_ix = self.ix_signal(stock_features, 'SMALL_IX', [1.4, .74, .8, 1.1]) 
-		big_ix = self.ix_signal(stock_features, 'BIG_IX', [1.1, .74, .8, 1.1]) 
+		stats['vix_2'].append(vix_2)
+		vix = self.vix_signal(stock_features)
+		stats['vix'].append(vix)
 		oil = self.oil_signal(stock_features)
-		return small_ix + big_ix + oil + small_boost + x
+		stats['oil'].append(oil)
+		return modified_ix_signal + oil + 1.2*small_boost + rain + 2*vix + vix_2 + copp
 		temp =  .01*self.temp_signal(stock_features)
+		stats['temp'].append(temp)
 	
-		rain = self.rain_signal(stock_features)
-		senti = self.senti_signal(stock_features)
 		
 
 #main for testing
 if __name__=='__main__':
 	gen = Generator()
 	print gen.simulate_portfolio()
+	x = np.asarray(stats['copp'])
+	print np.std(x), np.mean(x), np.max(x)
+
+	for cat, values in stats.iteritems():
+		arr = np.asarray(values)
+		mean = np.mean(arr)
+		std = np.std(arr)
+		threshold = max(abs(mean-2*std), abs(mean+2*std))
+		print cat, threshold
