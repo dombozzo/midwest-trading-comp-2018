@@ -33,23 +33,38 @@ class Generator(PortfolioGenerator):
 	
 	#get ticker values for high pb firms
 	def get_high_pb_inds(self, stock_features):
-	
 		curr_cap = stock_features[['ticker','pb']].tail(1000)
 		median = curr_cap['pb'].median()
 		upper_half = curr_cap[curr_cap['pb'] > median]['ticker']
 		return upper_half
-		upper_inds = []
 		curr_cap = stock_features[['ticker','pb','industry']].tail(1000)
-		median = curr_cap[curr_cap['industry'] == 'TECH']['pb'].median()
-		upper_inds.append(curr_cap[curr_cap['pb'] > median]['ticker'].values
-		median = curr_cap[curr_cap['industry'] == 'AGRICULTURE']['pb'].median()
-		upper_inds.append(curr_cap[curr_cap['pb'] > median]['ticker'].values
-		median = curr_cap[curr_cap['industry'] == 'FINANCE']['pb'].median()
-		upper_inds.append(curr_cap[curr_cap['pb'] > median]['ticker'].values
-		median = curr_cap[curr_cap['industry'] == 'CONSUMER']['pb'].median()
-		upper_inds.append(curr_cap[curr_cap['pb'] > median]['ticker'].values
-		median = curr_cap[curr_cap['industry'] == 'OTHER']['pb'].median()
-		upper_inds.append(curr_cap[curr_cap['pb'] > median]['ticker'].values
+
+		#tech
+		tech = curr_cap[curr_cap['industry'] == 'TECH']
+		median = tech['pb'].median()
+		upper_inds = tech[tech['pb'] > median]['ticker'].values
+
+		#agriculture
+		ag = curr_cap[curr_cap['industry'] == 'AGRICULTURE']
+		median = ag['pb'].median()
+		upper_inds = np.concatenate((upper_inds, ag[ag['pb'] > median]['ticker'].values))
+
+		#finance
+		fin = curr_cap[curr_cap['industry'] == 'FINANCE']
+		median = fin['pb'].median()
+		upper_inds = np.concatenate((upper_inds, fin[fin['pb'] > median]['ticker'].values))
+
+
+		#consumer
+		cons = curr_cap[curr_cap['industry'] == 'CONSUMER']
+		median = cons['pb'].median()
+		upper_inds = np.concatenate((upper_inds, cons[cons['pb'] > median]['ticker'].values))
+
+		#other
+		other = curr_cap[curr_cap['industry'] == 'OTHER']
+		median = other['pb'].median()
+		upper_inds = np.concatenate((upper_inds, other[other['pb'] > median]['ticker'].values))
+		
 		return upper_inds
 
 	#gets ticker values for small cap firms
@@ -295,13 +310,13 @@ class Generator(PortfolioGenerator):
 		oil = (10 / thresholds['oil']) * oil
 		
 		#temperature signal
-		temp =  self.temp_signal(stock_features)
+		temp =	self.temp_signal(stock_features)
 		#stats['temp'].append(temp)
 		temp.clip_upper(thresholds['temp'])
 		temp.clip_lower(-1*thresholds['temp'])
 		temp = (10 / thresholds['temp']) * temp
 
-		result = 1.5*copp + .01*senti + .3*rain + 1.2*sig_3mr + .3*vix_2 + .8*vix + .6*oil + .01*temp + 2.5*small_boost + 1.75*high_pb_penalty
+		result = 1.5*copp + .01*senti + .3*rain + 1.2*sig_3mr + .3*vix_2 + .8*vix + .6*oil + .01*temp + 2.75*small_boost + 3*high_pb_penalty
 		return result
 		
 	
