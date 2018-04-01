@@ -316,7 +316,7 @@ class Generator(PortfolioGenerator):
 		temp.clip_lower(-1*thresholds['temp'])
 		temp = (10 / thresholds['temp']) * temp
 
-		result = 1.5*copp + .01*senti + .3*rain + 1.2*sig_3mr + .3*vix_2 + .8*vix + .6*oil + .01*temp + 2.75*small_boost + 3*high_pb_penalty
+		result = 1.75*copp - .01*senti + .3*rain + 1.2*sig_3mr + .3*vix_2 + .8*vix + .6*oil - .01*temp + 3.75*small_boost + 4*high_pb_penalty
 		return result
 		
 	
