@@ -33,10 +33,24 @@ class Generator(PortfolioGenerator):
 	
 	#get ticker values for high pb firms
 	def get_high_pb_inds(self, stock_features):
+	
 		curr_cap = stock_features[['ticker','pb']].tail(1000)
 		median = curr_cap['pb'].median()
 		upper_half = curr_cap[curr_cap['pb'] > median]['ticker']
-		return upper_half.values
+		return upper_half
+		upper_inds = []
+		curr_cap = stock_features[['ticker','pb','industry']].tail(1000)
+		median = curr_cap[curr_cap['industry'] == 'TECH']['pb'].median()
+		upper_inds.append(curr_cap[curr_cap['pb'] > median]['ticker'].values
+		median = curr_cap[curr_cap['industry'] == 'AGRICULTURE']['pb'].median()
+		upper_inds.append(curr_cap[curr_cap['pb'] > median]['ticker'].values
+		median = curr_cap[curr_cap['industry'] == 'FINANCE']['pb'].median()
+		upper_inds.append(curr_cap[curr_cap['pb'] > median]['ticker'].values
+		median = curr_cap[curr_cap['industry'] == 'CONSUMER']['pb'].median()
+		upper_inds.append(curr_cap[curr_cap['pb'] > median]['ticker'].values
+		median = curr_cap[curr_cap['industry'] == 'OTHER']['pb'].median()
+		upper_inds.append(curr_cap[curr_cap['pb'] > median]['ticker'].values
+		return upper_inds
 
 	#gets ticker values for small cap firms
 	def get_small_cap_inds(self, stock_features):
@@ -287,7 +301,7 @@ class Generator(PortfolioGenerator):
 		temp.clip_lower(-1*thresholds['temp'])
 		temp = (10 / thresholds['temp']) * temp
 
-		result = 1.5*copp + .01*senti + .3*rain + 1.2*sig_3mr + .3*vix_2 + .8*vix + .6*oil + .01*temp + 2*small_boost + high_pb_penalty
+		result = 1.5*copp + .01*senti + .3*rain + 1.2*sig_3mr + .3*vix_2 + .8*vix + .6*oil + .01*temp + 2.5*small_boost + 1.75*high_pb_penalty
 		return result
 		
 	
