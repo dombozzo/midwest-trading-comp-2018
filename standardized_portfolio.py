@@ -241,6 +241,15 @@ class Generator(PortfolioGenerator):
 	# all the individual signal functions above
 	def build_signal(self, stock_features):
 
+		#industry specific bumps
+		ag_bump = np.zeros(1000)
+		ag_bump[200:400] += 5
+		fin_bump = np.zeros(1000)
+		fin_bump[400:600] -= 2.5
+		cons_bump = np.zeros(1000)
+		cons_bump[600:800] += 15
+		ind_bump = ag_bump + fin_bump + cons_bump
+
 		#penalty for high pb ratio firms #TODO - make more fine-tuned
 		high_pb = self.get_high_pb_inds(stock_features)
 		high_pb_penalty = np.zeros(1000)
@@ -316,7 +325,10 @@ class Generator(PortfolioGenerator):
 		temp.clip_lower(-1*thresholds['temp'])
 		temp = (10 / thresholds['temp']) * temp
 
-		result = 1.75*copp - .01*senti + .3*rain + 1.2*sig_3mr + .3*vix_2 + .8*vix + .6*oil - .01*temp + 3.75*small_boost + 4*high_pb_penalty
+
+
+
+		result = 1.5*copp - .01*senti + .3*rain + 1.2*sig_3mr + .3*vix_2 + .8*vix + .6*oil - .01*temp + 3.75*small_boost + 4*high_pb_penalty + ind_bump
 		return result
 		
 	
