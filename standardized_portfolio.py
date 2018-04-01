@@ -12,8 +12,8 @@ import numpy as np
 from portfolio import PortfolioGenerator
 import collections
 
-#TODO - remove -- global variable for stat collection
-#stats = collections.defaultdict(list)
+#thresholds for different features to help with standardization
+#calcd as max(mean(feature) + 2*std(feature), mean(feature) - 2*std(feature)
 thresholds = {'senti': 3.87765524879, \
 			  'temp': 652.887038887, \
 			  'vix_2': 0.126085094522, \
@@ -22,7 +22,8 @@ thresholds = {'senti': 3.87765524879, \
 			  'copp': 0.0577264226424, \
 			  'oil': 0.119131372099, \
 			  'vix': 0.0144128819314,
-			  'mod_ix': 0.0644891866728 \
+			  'mod_ix': 0.0644891866728, \
+			  'ustry': 0.00123718877558 \
 			  }
 
 
@@ -67,6 +68,15 @@ class Generator(PortfolioGenerator):
 		
 		return upper_inds
 
+	#signal for USD-TRY exchange rate -- cubic relationship
+	def ustry_signal(self, stock_features):
+		avg_ustry = 0.212385045918
+		today = stock_features[['ticker', 'US_TRY']].tail(1000)
+		today = today.set_index('ticker')
+		
+		diff_today_avg = (today['US_TRY'] - avg_ustry) ** 3
+		return diff_today_avg
+
 	#gets ticker values for small cap firms
 	def get_small_cap_inds(self, stock_features):
 		curr_cap = stock_features[['ticker','market_cap']].tail(1000)
@@ -108,7 +118,6 @@ class Generator(PortfolioGenerator):
 		result = pd.concat([tech, agriculture, finance, consumer, other])
 		return result
 	
-	#TODO - figure out why not working
 	#mitigated linear - negative % deviation from average
 	def vix_signal(self, stock_features):
 		avg_vix = 15.5305463609
@@ -126,13 +135,11 @@ class Generator(PortfolioGenerator):
 		result = pd.concat([tech, agriculture, finance, consumer, other])
 		return result		
 		
-	#TODO
 	# second vix signal
 	def vix2_signal(self, stock_features):
 		last2 = stock_features[['ticker','industry','VIX']].tail(2000)
 		yest = last2.head(1000).set_index('ticker')
 		today = last2.tail(1000).set_index('ticker')
-		#TODO - make quadratic
 		pct_chg = today[['industry']].join((-1*(today.VIX - yest.VIX)/yest.VIX) ** 3)
 
 		#now mitigate changes based on industry
@@ -145,8 +152,8 @@ class Generator(PortfolioGenerator):
 		result = pd.concat([tech, agriculture, finance, consumer, other])
 		return result
 
-	
-	#TODO - need something better
+
+	#signal for temperature
 	def temp_signal(self, stock_features):
 		last25 = stock_features[['ticker','industry','TEMP']].tail(25000)
 		today = last25.tail(1000).set_index('ticker')
@@ -169,7 +176,7 @@ class Generator(PortfolioGenerator):
 		result = pd.concat([tech, agriculture, finance, consumer, other])
 		return result
 
-	#TODO - implement mitigated linear distribution based on deviance from average	
+	#signal for rain
 	def rain_signal(self, stock_features):	
 		avg_rain = 0.377809102452
 		today = stock_features[['ticker', 'industry', 'RAIN']].tail(1000)
@@ -186,7 +193,7 @@ class Generator(PortfolioGenerator):
 		result = pd.concat([tech, agriculture, finance, consumer, other])
 		return result		
 
-	#TODO - value as compared to mean
+	#feature for sentiment -- value as compared to mean
 	def senti_signal(self, stock_features):
 		avg_senti = 68.9302780531
 		today = stock_features[['ticker','industry', 'SENTI']].tail(1000)
@@ -203,7 +210,7 @@ class Generator(PortfolioGenerator):
 		result = pd.concat([tech,agriculture, finance, consumer, other])
 		return result
 
-	#TODO - include notion of market cap
+	#signal for small and large cap firms
 	def ix_signal(self, stock_features, ix_type, ind_weights):
 		last2 = stock_features[['ticker','industry',ix_type]].tail(2000)
 		yest = last2.head(1000).set_index('ticker')
@@ -220,69 +227,39 @@ class Generator(PortfolioGenerator):
 		result = pd.concat([tech, agriculture, finance, consumer, other])
 		return result
 	
-	#TODO -- need something better
 	#signal for 3 monthly t-bill rates - inversely related to market movements
 	def get_3mr_signal(self, stock_features):
-		last2 = stock_features[['ticker','industry','3M_R']].tail(2000)
-		#yest = last2.head(1000).set_index('ticker')
-		today = last2.tail(1000).set_index('ticker')
-		#inv_pct_chg = today[['industry']].join((yest['3M_R'] - today['3M_R'])/yest['3M_R'])
-		#TODO - this makes no sense -- bond rates should be inversely correlated
+		today = stock_features[['ticker','industry','3M_R']].tail(1000)
+		today = today.set_index('ticker')
 		avg3m_r = 0.092660508209
 		diff_today_avg = today['3M_R'] - avg3m_r
 		diff = today[['industry']].join(diff_today_avg)
 		return diff['3M_R']
 
 
-		return inv_pct_chg['3M_R']
-
-
 	# this is the function that actually builds the final signals based on the
 	# all the individual signal functions above
 	def build_signal(self, stock_features):
 
+		#USD-TRY signal
+		ustry = self.ustry_signal(stock_features)
+		ustry.clip_upper(thresholds['ustry'])
+		ustry.clip_lower(-1*thresholds['ustry'])
+		ustry = (10 / thresholds['ustry']) * ustry
+
 		#industry specific bumps
+		today = stock_features[['ticker','industry']].tail(1000)
 		ag_bump = np.zeros(1000)
-		ag_bump[200:400] += 5
+		ag_inds = today[today['industry'] == 'AGRICULTURE']['ticker'].values
+		ag_bump[ag_inds] += 7.8
+		fin_inds = today[today['industry'] == 'FINANCE']['ticker'].values
 		fin_bump = np.zeros(1000)
-		fin_bump[400:600] -= 2.5
+		fin_bump[fin_inds] -= 2.5
 		cons_bump = np.zeros(1000)
-		cons_bump[600:800] += 15
+		cons_inds = today[today['industry'] == 'CONSUMER']['ticker'].values
+		cons_bump[cons_inds] += 24
 		ind_bump = ag_bump + fin_bump + cons_bump
-
-		#penalty for high pb ratio firms #TODO - make more fine-tuned
-		high_pb = self.get_high_pb_inds(stock_features)
-		high_pb_penalty = np.zeros(1000)
-		high_pb_penalty[high_pb] -= 5
-
-		#copper signal
-		copp = self.copper_signal(stock_features)
-		#stats['copp'].append(copp)
-		copp.clip_upper(thresholds['copp'])
-		copp.clip_lower(-1*thresholds['copp'])
-		copp = (10 / thresholds['copp']) * copp
 		
-		#sentiment signal
-		senti = self.senti_signal(stock_features)
-		#stats['senti'].append(senti)
-		senti.clip_upper(thresholds['senti'])
-		senti.clip_lower(-1*thresholds['senti'])
-		senti = (10 / thresholds['senti']) * senti
-		
-		#rain signal
-		rain = self.rain_signal(stock_features)
-		#stats['rain'].append(rain)
-		rain.clip_upper(thresholds['rain'])
-		rain.clip_lower(-1*thresholds['rain'])
-		rain = (10 / thresholds['rain']) * rain
-		
-		#t-bill signal
-		sig_3mr = self.get_3mr_signal(stock_features)
-		#stats['3mr'].append(sig_3mr)
-		sig_3mr.clip_upper(thresholds['3mr'])
-		sig_3mr.clip_lower(-1*thresholds['3mr'])
-		sig_3mr = (10 / thresholds['3mr']) * sig_3mr
-
 		#provide boost to small-cap firms
 		small_inds = self.get_small_cap_inds(stock_features)
 		small_boost = np.zeros(1000)
@@ -290,45 +267,79 @@ class Generator(PortfolioGenerator):
 		small_boost[small_inds] += 5
 		large_boost[small_inds] -= 5
 
+		#penalty for high pb ratio firms
+		high_pb = self.get_high_pb_inds(stock_features)
+		high_pb_penalty = np.zeros(1000)
+		high_pb_penalty[high_pb] -= 5
+
+		ticker_boost = 2.75*small_boost + 3.75*high_pb_penalty + ind_bump
+
+		#copper signal
+		copp = self.copper_signal(stock_features)
+		copp.clip_upper(thresholds['copp'])
+		copp.clip_lower(-1*thresholds['copp'])
+		copp = (10 / thresholds['copp']) * copp
+		
+		#sentiment signal -- no relationship found
+		'''
+		senti = self.senti_signal(stock_features)
+		senti.clip_upper(thresholds['senti'])
+		senti.clip_lower(-1*thresholds['senti'])
+		senti = (10 / thresholds['senti']) * senti
+		'''
+		
+		#rain signal -- no significant relationship found
+		'''
+		rain = self.rain_signal(stock_features)
+		rain.clip_upper(thresholds['rain'])
+		rain.clip_lower(-1*thresholds['rain'])
+		rain = (10 / thresholds['rain']) * rain
+		'''
+
+		#t-bill signal
+		sig_3mr = self.get_3mr_signal(stock_features)
+		sig_3mr.clip_upper(thresholds['3mr'])
+		sig_3mr.clip_lower(-1*thresholds['3mr'])
+		sig_3mr = (10 / thresholds['3mr']) * sig_3mr
+		
 		#calculate ix signal
 		small_ix = self.ix_signal(stock_features, 'SMALL_IX', [1.4, .74, .8, 1.1]) 
 		big_ix = self.ix_signal(stock_features, 'BIG_IX', [1.1, .74, .8, 1.1]) 
 		modified_ix = small_ix * small_boost + big_ix * large_boost
-		#stats['mod_ix'].append(modified_ix)
 		modified_ix = (10 / thresholds['mod_ix']) * modified_ix
 		
-		#calculate vix2 signal
+		#calculate vix2 signal -- no significant relationship found
+		'''
 		vix_2 = self.vix2_signal(stock_features)
-		#stats['vix_2'].append(vix_2)
 		vix_2.clip_upper(thresholds['vix_2'])
 		vix_2.clip_lower(-1*thresholds['vix_2'])
 		vix_2 = (10 / thresholds['vix_2']) * vix_2
+		'''
 		
 		#vix signal
 		vix = self.vix_signal(stock_features)
-		#stats['vix'].append(vix)
 		vix.clip_upper(thresholds['vix'])
 		vix.clip_lower(-1*thresholds['vix'])
 		vix = (10 / thresholds['vix']) * vix
 		
 		#oil signal
 		oil = self.oil_signal(stock_features)
-		#stats['oil'].append(oil)
 		oil.clip_upper(thresholds['oil'])
 		oil.clip_lower(-1*thresholds['oil'])
 		oil = (10 / thresholds['oil']) * oil
 		
-		#temperature signal
+		
+		#temperature signal -- no relationship found
+		'''
 		temp =	self.temp_signal(stock_features)
-		#stats['temp'].append(temp)
 		temp.clip_upper(thresholds['temp'])
 		temp.clip_lower(-1*thresholds['temp'])
 		temp = (10 / thresholds['temp']) * temp
+		'''
 
-
-
-
-		result = 1.5*copp - .01*senti + .3*rain + 1.2*sig_3mr + .3*vix_2 + .8*vix + .6*oil - .01*temp + 3.75*small_boost + 4*high_pb_penalty + ind_bump
+		result = .75*copp + ticker_boost + .35*sig_3mr + .29*vix + .2*oil + .75*ustry
+		result.clip_upper(100)
+		result.clip_lower(100)
 		return result
 		
 	
@@ -338,12 +349,3 @@ class Generator(PortfolioGenerator):
 if __name__=='__main__':
 	gen = Generator()
 	print gen.simulate_portfolio()
-	
-	'''
-	for cat, values in stats.iteritems():
-		arr = np.asarray(values)
-		mean = np.mean(arr)
-		std = np.std(arr)
-		threshold = max(abs(mean-2*std), abs(mean+2*std))
-		print cat, threshold
-	'''
