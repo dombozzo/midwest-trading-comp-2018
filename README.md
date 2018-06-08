@@ -17,3 +17,5 @@ The following important files are included in the directory:
                        be an acceptable submission.  
 - stock_data/ : a directory where you should add the provided "ticker_data.csv" and  
                 "factor_data.csv" files.  
+- standardized_portfolio.py : a final algorithmic function to generate signals 
+                indicating the favoribility of stocks
